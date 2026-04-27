@@ -248,6 +248,7 @@ export function POSScreen() {
     }
 
     try {
+      const receiptItems = cart.map(({ lineId: _l, ...rest }) => rest);
       const sale = await recordSale({
         business_id: activeBusinessId,
         branch_id: activeBranchId,
@@ -260,15 +261,17 @@ export function POSScreen() {
         total,
         payment_ref: paymentRef ?? null,
         mpesa_transaction_id: mpesaTxId ?? null,
-        items: cart.map(({ lineId: _l, ...rest }) => rest),
+        items: receiptItems,
         created_by: user?.id ?? null,
       });
       setLastReceipt(sale.receipt_no ?? sale.id);
+      setLastSale(toReceiptSale(sale, receiptItems));
       setConfirmOpen(true);
       setPayOpen(false);
       clearCart();
       reloadHw();
       reloadTm();
+      reloadSales();
       return sale;
     } catch (e) {
       toast.error((e as Error).message);
