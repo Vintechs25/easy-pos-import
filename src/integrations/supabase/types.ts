@@ -472,6 +472,45 @@ export type Database = {
           },
         ]
       }
+      sale_refunds: {
+        Row: {
+          amount: number
+          branch_id: string | null
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          items: Json
+          reason: string | null
+          restocked: boolean
+          sale_id: string
+        }
+        Insert: {
+          amount?: number
+          branch_id?: string | null
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items?: Json
+          reason?: string | null
+          restocked?: boolean
+          sale_id: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string | null
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items?: Json
+          reason?: string | null
+          restocked?: boolean
+          sale_id?: string
+        }
+        Relationships: []
+      }
       sales: {
         Row: {
           branch_id: string
@@ -486,9 +525,16 @@ export type Database = {
           payment_method: string
           payment_ref: string | null
           receipt_no: string | null
+          refund_amount: number
+          refund_reason: string | null
+          refunded_at: string | null
+          refunded_by: string | null
           status: string
           subtotal: number
           total: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           branch_id: string
@@ -503,9 +549,16 @@ export type Database = {
           payment_method: string
           payment_ref?: string | null
           receipt_no?: string | null
+          refund_amount?: number
+          refund_reason?: string | null
+          refunded_at?: string | null
+          refunded_by?: string | null
           status?: string
           subtotal?: number
           total?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           branch_id?: string
@@ -520,9 +573,16 @@ export type Database = {
           payment_method?: string
           payment_ref?: string | null
           receipt_no?: string | null
+          refund_amount?: number
+          refund_reason?: string | null
+          refunded_at?: string | null
+          refunded_by?: string | null
           status?: string
           subtotal?: number
           total?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -554,6 +614,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stock_adjustments: {
+        Row: {
+          branch_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          delta: number
+          id: string
+          new_value: number
+          old_value: number
+          product_id: string
+          product_kind: string
+          product_name: string
+          reason: string | null
+          source: string
+        }
+        Insert: {
+          branch_id: string
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          delta: number
+          id?: string
+          new_value: number
+          old_value: number
+          product_id: string
+          product_kind: string
+          product_name: string
+          reason?: string | null
+          source?: string
+        }
+        Update: {
+          branch_id?: string
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          delta?: number
+          id?: string
+          new_value?: number
+          old_value?: number
+          product_id?: string
+          product_kind?: string
+          product_name?: string
+          reason?: string | null
+          source?: string
+        }
+        Relationships: []
       }
       suppliers: {
         Row: {
