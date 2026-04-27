@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,6 +25,7 @@ interface AuthContextValue {
   activeBusinessId: string | null;
   setActiveBusinessId: (id: string | null) => void;
   loading: boolean;
+  authError: string | null;
   isSystemOwner: boolean;
   isBusinessAdmin: boolean;
   isSupervisor: boolean;
@@ -40,9 +41,13 @@ const ACTIVE_BIZ_KEY = "ty_active_business";
 
 async function retryCloudQuery<T>(queryFactory: () => PromiseLike<{ data: T | null; error: unknown }>) {
   let lastResult: { data: T | null; error: unknown } = { data: null, error: null };
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     lastResult = await queryFactory();
     if (!lastResult.error) return lastResult;
+    const message = lastResult.error instanceof Error ? lastResult.error.message : String(lastResult.error ?? "");
+    if (message.includes("schema cache") || message.includes("PGRST002")) {
+      break;
+    }
     await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
   }
   return lastResult;
@@ -55,6 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const bootstrappedRef = useRef(false);
 
   const setActiveBusinessId = (id: string | null) => {
     setActiveBusinessIdState(id);
@@ -65,10 +72,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loadUserData = async (uid: string) => {
-    const [{ data: rolesData }, { data: bizData }] = await Promise.all([
+    setAuthError(null);
+    const [{ data: rolesData, error: rolesError }, { data: bizData, error: bizError }] = await Promise.all([
       retryCloudQuery(() => supabase.from("user_roles").select("role,business_id,branch_id").eq("user_id", uid)),
       retryCloudQuery(() => supabase.from("businesses").select("id,name,slug,status").order("name")),
     ]);
+    if (rolesError || bizError) {
+      const message = [rolesError, bizError]
+        .filter(Boolean)
+        .map((error) => (error instanceof Error ? error.message : String(error)))
+        .join(" · ");
+      setAuthError(message || "We couldn't load your access rights right now.");
+      setRoles([]);
+      setBusinesses([]);
+      setActiveBusinessIdState(null);
+      return;
+    }
+
     setRoles((rolesData as UserRole[]) ?? []);
     setBusinesses((bizData as BusinessSummary[]) ?? []);
 
@@ -85,34 +105,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refresh = async () => {
-    if (user) await loadUserData(user.id);
+    setLoading(true);
+    try {
+      if (user) await loadUserData(user.id);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const applySession = (newSession: Session | null) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        // defer to avoid deadlocks
+        setLoading(true);
         setTimeout(() => {
           loadUserData(newSession.user.id).finally(() => setLoading(false));
         }, 0);
       } else {
+        setAuthError(null);
         setRoles([]);
         setBusinesses([]);
         setActiveBusinessIdState(null);
         setLoading(false);
       }
+    };
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!bootstrappedRef.current && event === "INITIAL_SESSION") return;
+      applySession(newSession);
     });
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        loadUserData(s.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
+      bootstrappedRef.current = true;
+      applySession(s);
     });
 
     return () => sub.subscription.unsubscribe();
@@ -139,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         activeBusinessId,
         setActiveBusinessId,
         loading,
+        authError,
         isSystemOwner,
         isBusinessAdmin,
         isSupervisor,
