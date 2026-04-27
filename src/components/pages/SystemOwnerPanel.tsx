@@ -433,6 +433,73 @@ export function SystemOwnerPanel() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="h-5 w-5" /> Daraja Checkout
+          </CardTitle>
+          <CardDescription>
+            System-owner-only M-Pesa STK Push credentials for each business.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <Select value={mpesaBusinessId || "none"} onValueChange={(v) => v !== "none" && loadMpesaConfig(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose business" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Choose business</SelectItem>
+                {businesses.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={mpesaForm.environment} onValueChange={(v) => setMpesaForm({ ...mpesaForm, environment: v as "sandbox" | "production" })}>
+              <SelectTrigger className="md:w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sandbox">Sandbox</SelectItem>
+                <SelectItem value="production">Production</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Shortcode</Label>
+              <Input value={mpesaForm.shortcode} onChange={(e) => setMpesaForm({ ...mpesaForm, shortcode: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Passkey</Label>
+              <Input value={mpesaForm.passkey} onChange={(e) => setMpesaForm({ ...mpesaForm, passkey: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consumer key</Label>
+              <Input value={mpesaForm.consumer_key} onChange={(e) => setMpesaForm({ ...mpesaForm, consumer_key: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consumer secret</Label>
+              <Input type="password" value={mpesaForm.consumer_secret} onChange={(e) => setMpesaForm({ ...mpesaForm, consumer_secret: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Callback URL override</Label>
+            <Input placeholder="Optional" value={mpesaForm.callback_url} onChange={(e) => setMpesaForm({ ...mpesaForm, callback_url: e.target.value })} />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={mpesaForm.enabled} onChange={(e) => setMpesaForm({ ...mpesaForm, enabled: e.target.checked })} />
+              Enable M-Pesa checkout
+            </label>
+            <Button onClick={saveMpesaConfig} disabled={mpesaBusy || !mpesaBusinessId}>
+              {mpesaBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Daraja settings
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Businesses</CardTitle>
           <CardDescription>
             {businesses.length} business{businesses.length === 1 ? "" : "es"} provisioned.
