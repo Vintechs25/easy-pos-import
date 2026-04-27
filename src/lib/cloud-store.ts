@@ -376,11 +376,22 @@ export async function deleteSupplier(id: string) {
 // =========================================================================
 // Sales
 // =========================================================================
-export function useSales(branchId: string | null, allBranches = false) {
+export interface SalesFilter {
+  from?: string | null; // ISO
+  to?: string | null;
+  paymentMethod?: string | null;
+  status?: string | null;
+  customerId?: string | null;
+  search?: string | null;
+  limit?: number;
+}
+
+export function useSales(branchId: string | null, allBranches = false, filter?: SalesFilter) {
   const { activeBusinessId } = useAuth();
   const [items, setItems] = useState<CloudSale[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const filterKey = JSON.stringify(filter ?? {});
   const load = useCallback(async () => {
     if (!activeBusinessId) {
       setItems([]);
@@ -393,12 +404,28 @@ export function useSales(branchId: string | null, allBranches = false) {
       .select("*")
       .eq("business_id", activeBusinessId)
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(filter?.limit ?? 500);
     if (!allBranches && branchId) q = q.eq("branch_id", branchId);
+    if (filter?.from) q = q.gte("created_at", filter.from);
+    if (filter?.to) q = q.lte("created_at", filter.to);
+    if (filter?.paymentMethod) q = q.eq("payment_method", filter.paymentMethod);
+    if (filter?.status) q = q.eq("status", filter.status);
+    if (filter?.customerId) q = q.eq("customer_id", filter.customerId);
     const { data } = await q;
-    setItems((data as CloudSale[]) ?? []);
+    let list = (data as CloudSale[]) ?? [];
+    if (filter?.search?.trim()) {
+      const s = filter.search.toLowerCase();
+      list = list.filter(
+        (x) =>
+          (x.receipt_no ?? "").toLowerCase().includes(s) ||
+          (x.customer_name ?? "").toLowerCase().includes(s) ||
+          (x.payment_ref ?? "").toLowerCase().includes(s),
+      );
+    }
+    setItems(list);
     setLoading(false);
-  }, [activeBusinessId, branchId, allBranches]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusinessId, branchId, allBranches, filterKey]);
 
   useEffect(() => {
     load();
