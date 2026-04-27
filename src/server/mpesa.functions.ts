@@ -54,6 +54,7 @@ interface MpesaCreds {
   passkey: string;
   consumer_key: string;
   consumer_secret: string;
+  callback_url: string | null;
   base_url: string;
 }
 
@@ -78,6 +79,10 @@ async function resolveCreds(
   const env = (cfg?.environment as "sandbox" | "production") ?? "sandbox";
   const base = env === "production" ? PRODUCTION_BASE : SANDBOX_BASE;
 
+  if (cfg?.enabled === false) {
+    throw new Error("M-Pesa checkout is disabled for this business.");
+  }
+
   if (env === "production") {
     if (!cfg?.shortcode || !cfg?.passkey || !cfg?.consumer_key || !cfg?.consumer_secret) {
       throw new Error(
@@ -90,6 +95,7 @@ async function resolveCreds(
       passkey: cfg.passkey,
       consumer_key: cfg.consumer_key,
       consumer_secret: cfg.consumer_secret,
+      callback_url: cfg.callback_url ?? null,
       base_url: base,
     };
   }
@@ -100,6 +106,7 @@ async function resolveCreds(
     passkey: cfg?.passkey ?? sandboxPasskey,
     consumer_key: cfg?.consumer_key ?? sandboxConsumerKey,
     consumer_secret: cfg?.consumer_secret ?? sandboxConsumerSecret,
+    callback_url: cfg?.callback_url ?? null,
     base_url: base,
   };
 }
@@ -175,12 +182,12 @@ export const initiateMpesaStk = createServerFn({ method: "POST" })
 
     // Where Safaricom should POST results.
     const callbackBase =
-      process.env.MPESA_CALLBACK_BASE_URL ?? process.env.PUBLIC_SITE_URL ?? "";
-    let callbackUrl = `${callbackBase.replace(/\/$/, "")}/api/public/mpesa-callback`;
-    if (!callbackBase) {
-      // Fall back to a request-derived host (works for production .lovable.app).
-      callbackUrl = "/api/public/mpesa-callback";
+      process.env.MPESA_CALLBACK_BASE_URL ?? process.env.PUBLIC_SITE_URL ?? process.env.VITE_PUBLIC_SITE_URL ?? "";
+    let callbackUrl = creds.callback_url || `${callbackBase.replace(/\/$/, "")}/api/public/mpesa-callback`;
+    if (!creds.callback_url && !callbackBase) {
+      throw new Error("M-Pesa callback URL is missing. Set it in Admin → Daraja Checkout.");
     }
+    if (!/^https:\/\//i.test(callbackUrl)) throw new Error("M-Pesa callback URL must be a public HTTPS URL.");
 
     const stkBody = {
       BusinessShortCode: creds.shortcode,

@@ -38,6 +38,16 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const ACTIVE_BIZ_KEY = "ty_active_business";
 
+async function retryCloudQuery<T>(queryFactory: () => PromiseLike<{ data: T | null; error: unknown }>) {
+  let lastResult: { data: T | null; error: unknown } = { data: null, error: null };
+  for (let attempt = 0; attempt < 4; attempt++) {
+    lastResult = await queryFactory();
+    if (!lastResult.error) return lastResult;
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return lastResult;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -56,8 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserData = async (uid: string) => {
     const [{ data: rolesData }, { data: bizData }] = await Promise.all([
-      supabase.from("user_roles").select("role,business_id,branch_id").eq("user_id", uid),
-      supabase.from("businesses").select("id,name,slug,status").order("name"),
+      retryCloudQuery(() => supabase.from("user_roles").select("role,business_id,branch_id").eq("user_id", uid)),
+      retryCloudQuery(() => supabase.from("businesses").select("id,name,slug,status").order("name")),
     ]);
     setRoles((rolesData as UserRole[]) ?? []);
     setBusinesses((bizData as BusinessSummary[]) ?? []);
