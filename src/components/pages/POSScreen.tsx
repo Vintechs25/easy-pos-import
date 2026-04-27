@@ -455,6 +455,15 @@ export function POSScreen() {
       {/* Catalog */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="border-b border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">Checkout</h1>
+              <p className="text-xs text-muted-foreground">Scan, sell, print receipts.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setSalesOpen(true)}>
+              <Clock className="h-4 w-4 mr-1" /> Sales history
+            </Button>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -624,8 +633,50 @@ export function POSScreen() {
             <div className="text-xl font-bold tracking-wider">{lastReceipt}</div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setConfirmOpen(false)} className="w-full">Done</Button>
+            <Button variant="outline" onClick={() => lastSale && printReceipt(lastSale, { businessName: activeBiz?.name ?? "TimberYard POS" })} disabled={!lastSale}>
+              <Printer className="h-4 w-4 mr-1" /> Print receipt
+            </Button>
+            <Button onClick={() => setConfirmOpen(false)}>Done</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sales history / reprint */}
+      <Dialog open={salesOpen} onOpenChange={setSalesOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" /> Sales history
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {recentSales.length === 0 && (
+              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No sales yet for this branch.
+              </div>
+            )}
+            {recentSales.map((sale) => (
+              <div key={sale.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{sale.receipt_no ?? sale.id.slice(0, 8)}</span>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-secondary-foreground">
+                      {sale.payment_method}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {new Date(sale.created_at).toLocaleString()} · {sale.customer_name ?? "Walk-in"}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-right font-bold">{formatKsh(Number(sale.total))}</div>
+                  <Button variant="outline" size="sm" onClick={() => reprintSale(sale.id)} disabled={reprintBusyId === sale.id}>
+                    {reprintBusyId === sale.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
