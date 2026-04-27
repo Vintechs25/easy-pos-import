@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   MapPin,
   Truck,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -50,6 +51,7 @@ type NavItem = {
 const allNav: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/pos", label: "Point of Sale", icon: ShoppingCart, highlight: true },
+  { to: "/sales", label: "Sales", icon: Receipt },
   { to: "/timber", label: "Timber Yard", icon: TreePine },
   { to: "/inventory", label: "Hardware", icon: Package },
   { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["system_owner", "business_admin", "supervisor"] },
