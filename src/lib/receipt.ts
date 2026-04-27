@@ -18,6 +18,7 @@ export function buildReceiptHTML(sale: SaleRecord, opts: ReceiptOptions = {}) {
     phone = "",
   } = opts;
   const date = new Date(sale.date).toLocaleString();
+  const receiptNo = sale.receiptNo ?? sale.id.slice(-6).toUpperCase();
   const itemsHtml = sale.items
     .map(
       (i) => `
@@ -33,7 +34,7 @@ export function buildReceiptHTML(sale: SaleRecord, opts: ReceiptOptions = {}) {
     .join("");
 
   return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Receipt ${sale.id.slice(-6)}</title>
+<html><head><meta charset="utf-8"><title>Receipt ${escape(receiptNo)}</title>
 <style>
   @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; } .noprint { display: none; } }
   body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #111; background: #fff; padding: 8px; }
@@ -55,10 +56,11 @@ export function buildReceiptHTML(sale: SaleRecord, opts: ReceiptOptions = {}) {
       ${phone ? `<div>${escape(phone)}</div>` : ""}
     </div>
     <hr/>
-    <div class="row"><span>Receipt #</span><span>${sale.id.slice(-6).toUpperCase()}</span></div>
+    <div class="row"><span>Receipt #</span><span>${escape(receiptNo)}</span></div>
     <div class="row"><span>Date</span><span>${escape(date)}</span></div>
     <div class="row"><span>Customer</span><span>${escape(sale.customerName)}</span></div>
     <div class="row"><span>Payment</span><span style="text-transform:uppercase">${sale.payment}</span></div>
+    ${sale.paymentRef ? `<div class="row"><span>Ref</span><span>${escape(sale.paymentRef)}</span></div>` : ""}
     <hr/>
     <table>
       <thead>
@@ -109,6 +111,7 @@ export function downloadReceiptPDF(sale: SaleRecord, opts: ReceiptOptions = {}) 
   let y = 6;
   const margin = 4;
   const innerW = widthMm - margin * 2;
+  const receiptNo = sale.receiptNo ?? sale.id.slice(-6).toUpperCase();
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -132,10 +135,11 @@ export function downloadReceiptPDF(sale: SaleRecord, opts: ReceiptOptions = {}) 
 
   doc.setFontSize(8);
   const meta = [
-    ["Receipt #", sale.id.slice(-6).toUpperCase()],
+    ["Receipt #", receiptNo],
     ["Date", new Date(sale.date).toLocaleString()],
     ["Customer", sale.customerName],
     ["Payment", sale.payment.toUpperCase()],
+    ...(sale.paymentRef ? [["Ref", sale.paymentRef]] : []),
   ];
   meta.forEach(([k, v]) => {
     doc.text(k, margin, y);
@@ -194,5 +198,5 @@ export function downloadReceiptPDF(sale: SaleRecord, opts: ReceiptOptions = {}) 
     { align: "center" },
   );
 
-  doc.save(`receipt-${sale.id.slice(-6)}.pdf`);
+  doc.save(`receipt-${receiptNo}.pdf`);
 }
