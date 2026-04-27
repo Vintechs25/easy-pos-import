@@ -611,3 +611,329 @@ export async function pollMpesaStatus(checkoutRequestId: string) {
 
 export const formatKsh = (n: number) =>
   `KSh ${n.toLocaleString("en-KE", { maximumFractionDigits: 2 })}`;
+
+// =========================================================================
+// Refunds, voids, stock adjustments
+// =========================================================================
+export interface RefundLine {
+  sale_item_id?: string;
+  product_id: string | null;
+  kind: "hardware" | "timber";
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  meta?: Record<string, unknown> | null;
+}
+
+export async function refundSale(args: {
+  sale: CloudSale;
+  lines: RefundLine[];
+  reason: string;
+  restock: boolean;
+  user_id: string | null;
+}) {
+  const amount = args.lines.reduce((s, l) => s + Number(l.total), 0);
+  if (amount <= 0) throw new Error("Nothing to refund");
+  const { error: refErr } = await supabase.from("sale_refunds").insert({
+    sale_id: args.sale.id,
+    business_id: args.sale.business_id,
+    branch_id: args.sale.branch_id,
+    amount,
+    reason: args.reason || null,
+    items: args.lines as never,
+    restocked: args.restock,
+    created_by: args.user_id,
+  });
+  if (refErr) throw refErr;
+
+  const newRefund = Number(args.sale.refund_amount ?? 0) + amount;
+  const fullyRefunded = newRefund >= Number(args.sale.total) - 0.001;
+  const { error: upErr } = await supabase
+    .from("sales")
+    .update({
+      refund_amount: newRefund,
+      refunded_at: new Date().toISOString(),
+      refunded_by: args.user_id,
+      refund_reason: args.reason || null,
+      status: fullyRefunded ? "refunded" : args.sale.status,
+    })
+    .eq("id", args.sale.id);
+  if (upErr) throw upErr;
+
+  if (args.restock) {
+    for (const line of args.lines) {
+      if (!line.product_id) continue;
+      if (line.kind === "hardware") {
+        const { data: prod } = await supabase
+          .from("hardware_products")
+          .select("stock")
+          .eq("id", line.product_id)
+          .maybeSingle();
+        if (prod) {
+          const newStock = Number(prod.stock) + Number(line.quantity);
+          await supabase
+            .from("hardware_products")
+            .update({ stock: newStock })
+            .eq("id", line.product_id);
+          await supabase.from("stock_adjustments").insert({
+            business_id: args.sale.business_id,
+            branch_id: args.sale.branch_id,
+            product_id: line.product_id,
+            product_kind: "hardware",
+            product_name: line.name,
+            delta: Number(line.quantity),
+            old_value: Number(prod.stock),
+            new_value: newStock,
+            reason: `Refund of sale ${args.sale.receipt_no ?? args.sale.id.slice(0, 8)}`,
+            source: "refund",
+            created_by: args.user_id,
+          });
+        }
+      } else if (line.kind === "timber") {
+        const pieces = Number((line.meta?.pieces as number) ?? line.quantity) || 0;
+        const { data: prod } = await supabase
+          .from("timber_products")
+          .select("pieces")
+          .eq("id", line.product_id)
+          .maybeSingle();
+        if (prod) {
+          const newPieces = Number(prod.pieces) + pieces;
+          await supabase
+            .from("timber_products")
+            .update({ pieces: newPieces })
+            .eq("id", line.product_id);
+          await supabase.from("stock_adjustments").insert({
+            business_id: args.sale.business_id,
+            branch_id: args.sale.branch_id,
+            product_id: line.product_id,
+            product_kind: "timber",
+            product_name: line.name,
+            delta: pieces,
+            old_value: Number(prod.pieces),
+            new_value: newPieces,
+            reason: `Refund of sale ${args.sale.receipt_no ?? args.sale.id.slice(0, 8)}`,
+            source: "refund",
+            created_by: args.user_id,
+          });
+        }
+      }
+    }
+  }
+
+  // For credit sales, reduce customer balance
+  if (args.sale.payment_method === "credit" && args.sale.customer_id) {
+    const { data: c } = await supabase
+      .from("customers")
+      .select("balance")
+      .eq("id", args.sale.customer_id)
+      .maybeSingle();
+    if (c) {
+      await supabase
+        .from("customers")
+        .update({ balance: Math.max(0, Number(c.balance) - amount) })
+        .eq("id", args.sale.customer_id);
+    }
+  }
+}
+
+export async function voidSale(args: {
+  sale: CloudSale;
+  reason: string;
+  restock: boolean;
+  user_id: string | null;
+}) {
+  const { data: full, error } = await supabase
+    .from("sales")
+    .select("*, sale_items(*)")
+    .eq("id", args.sale.id)
+    .single();
+  if (error || !full) throw error ?? new Error("Sale not found");
+  const sale = full as CloudSale;
+  if (sale.status === "voided") throw new Error("Already voided");
+
+  if (args.restock) {
+    for (const item of sale.sale_items ?? []) {
+      if (!item.product_id) continue;
+      if (item.kind === "hardware") {
+        const { data: prod } = await supabase
+          .from("hardware_products")
+          .select("stock")
+          .eq("id", item.product_id)
+          .maybeSingle();
+        if (prod) {
+          const newStock = Number(prod.stock) + Number(item.quantity);
+          await supabase
+            .from("hardware_products")
+            .update({ stock: newStock })
+            .eq("id", item.product_id);
+          await supabase.from("stock_adjustments").insert({
+            business_id: sale.business_id,
+            branch_id: sale.branch_id,
+            product_id: item.product_id,
+            product_kind: "hardware",
+            product_name: item.name,
+            delta: Number(item.quantity),
+            old_value: Number(prod.stock),
+            new_value: newStock,
+            reason: `Void sale ${sale.receipt_no ?? sale.id.slice(0, 8)}`,
+            source: "void",
+            created_by: args.user_id,
+          });
+        }
+      } else if (item.kind === "timber") {
+        const pieces =
+          Number((item.meta as { pieces?: number } | null)?.pieces ?? item.quantity) || 0;
+        const { data: prod } = await supabase
+          .from("timber_products")
+          .select("pieces")
+          .eq("id", item.product_id)
+          .maybeSingle();
+        if (prod) {
+          const newPieces = Number(prod.pieces) + pieces;
+          await supabase
+            .from("timber_products")
+            .update({ pieces: newPieces })
+            .eq("id", item.product_id);
+          await supabase.from("stock_adjustments").insert({
+            business_id: sale.business_id,
+            branch_id: sale.branch_id,
+            product_id: item.product_id,
+            product_kind: "timber",
+            product_name: item.name,
+            delta: pieces,
+            old_value: Number(prod.pieces),
+            new_value: newPieces,
+            reason: `Void sale ${sale.receipt_no ?? sale.id.slice(0, 8)}`,
+            source: "void",
+            created_by: args.user_id,
+          });
+        }
+      }
+    }
+  }
+
+  if (sale.payment_method === "credit" && sale.customer_id) {
+    const { data: c } = await supabase
+      .from("customers")
+      .select("balance")
+      .eq("id", sale.customer_id)
+      .maybeSingle();
+    if (c) {
+      await supabase
+        .from("customers")
+        .update({ balance: Math.max(0, Number(c.balance) - Number(sale.total)) })
+        .eq("id", sale.customer_id);
+    }
+  }
+
+  const { error: upErr } = await supabase
+    .from("sales")
+    .update({
+      status: "voided",
+      voided_at: new Date().toISOString(),
+      voided_by: args.user_id,
+      void_reason: args.reason || null,
+    })
+    .eq("id", sale.id);
+  if (upErr) throw upErr;
+}
+
+export async function adjustStock(args: {
+  business_id: string;
+  branch_id: string;
+  product_id: string;
+  product_kind: "hardware" | "timber";
+  product_name: string;
+  new_value: number;
+  reason: string;
+  user_id: string | null;
+}) {
+  const table = args.product_kind === "hardware" ? "hardware_products" : "timber_products";
+  const col = args.product_kind === "hardware" ? "stock" : "pieces";
+  const { data: prod, error: rdErr } = await supabase
+    .from(table)
+    .select(col)
+    .eq("id", args.product_id)
+    .maybeSingle();
+  if (rdErr) throw rdErr;
+  if (!prod) throw new Error("Product not found");
+  const old = Number((prod as Record<string, number>)[col]);
+  const next = Math.max(0, Number(args.new_value));
+  const delta = next - old;
+  await supabase.from(table).update({ [col]: next }).eq("id", args.product_id);
+  await supabase.from("stock_adjustments").insert({
+    business_id: args.business_id,
+    branch_id: args.branch_id,
+    product_id: args.product_id,
+    product_kind: args.product_kind,
+    product_name: args.product_name,
+    delta,
+    old_value: old,
+    new_value: next,
+    reason: args.reason || null,
+    source: "manual",
+    created_by: args.user_id,
+  });
+}
+
+export async function bulkInsertHardware(rows: Array<Partial<CloudHardware> & { business_id: string; branch_id: string; name: string }>) {
+  if (!rows.length) return;
+  const { error } = await supabase.from("hardware_products").insert(rows);
+  if (error) throw error;
+}
+export async function bulkInsertTimber(rows: Array<Partial<CloudTimber> & { business_id: string; branch_id: string; species: string }>) {
+  if (!rows.length) return;
+  const { error } = await supabase.from("timber_products").insert(rows);
+  if (error) throw error;
+}
+export async function bulkInsertCustomers(rows: Array<Partial<CloudCustomer> & { business_id: string; name: string }>) {
+  if (!rows.length) return;
+  const { error } = await supabase.from("customers").insert(rows);
+  if (error) throw error;
+}
+export async function bulkInsertSuppliers(rows: Array<Partial<CloudSupplier> & { business_id: string; name: string }>) {
+  if (!rows.length) return;
+  const { error } = await supabase.from("suppliers").insert(rows);
+  if (error) throw error;
+}
+
+export interface StockAdjustment {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  product_id: string;
+  product_kind: "hardware" | "timber";
+  product_name: string;
+  delta: number;
+  old_value: number;
+  new_value: number;
+  reason: string | null;
+  source: string;
+  created_by: string | null;
+  created_at: string;
+}
+export function useStockAdjustments(branchId: string | null) {
+  const [items, setItems] = useState<StockAdjustment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
+    if (!branchId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data } = await supabase
+      .from("stock_adjustments")
+      .select("*")
+      .eq("branch_id", branchId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    setItems((data as StockAdjustment[]) ?? []);
+    setLoading(false);
+  }, [branchId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  return { items, loading, reload: load };
+}
