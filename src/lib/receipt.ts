@@ -1,5 +1,4 @@
 import type { SaleRecord } from "@/lib/types";
-import jsPDF from "jspdf";
 
 interface ReceiptOptions {
   businessName?: string;
@@ -103,7 +102,8 @@ export function printReceipt(sale: SaleRecord, opts?: ReceiptOptions) {
   w.onload = () => setTimeout(() => w.print(), 200);
 }
 
-export function downloadReceiptPDF(sale: SaleRecord, opts: ReceiptOptions = {}) {
+export async function downloadReceiptPDF(sale: SaleRecord, opts: ReceiptOptions = {}) {
+  const { default: jsPDF } = await import("jspdf");
   // 80mm width thermal-style PDF
   const widthMm = 80;
   const lineH = 4.2;
