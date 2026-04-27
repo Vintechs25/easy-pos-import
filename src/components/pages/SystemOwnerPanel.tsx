@@ -190,6 +190,49 @@ export function SystemOwnerPanel() {
     }
   };
 
+  const loadMpesaConfig = async (businessId: string) => {
+    setMpesaBusinessId(businessId);
+    const { data, error } = await supabase
+      .from("mpesa_config")
+      .select("*")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setMpesaForm({
+      environment: (data?.environment as "sandbox" | "production") ?? "sandbox",
+      shortcode: data?.shortcode ?? "",
+      passkey: data?.passkey ?? "",
+      consumer_key: data?.consumer_key ?? "",
+      consumer_secret: data?.consumer_secret ?? "",
+      callback_url: data?.callback_url ?? "",
+      enabled: Boolean(data?.enabled),
+    });
+  };
+
+  const saveMpesaConfig = async () => {
+    if (!mpesaBusinessId) {
+      toast.error("Select a business first");
+      return;
+    }
+    setMpesaBusy(true);
+    const { error } = await supabase.from("mpesa_config").upsert({
+      business_id: mpesaBusinessId,
+      environment: mpesaForm.environment,
+      shortcode: mpesaForm.shortcode.trim() || null,
+      passkey: mpesaForm.passkey.trim() || null,
+      consumer_key: mpesaForm.consumer_key.trim() || null,
+      consumer_secret: mpesaForm.consumer_secret.trim() || null,
+      callback_url: mpesaForm.callback_url.trim() || null,
+      enabled: mpesaForm.enabled,
+    }, { onConflict: "business_id" });
+    setMpesaBusy(false);
+    if (error) toast.error(error.message);
+    else toast.success("Daraja settings saved");
+  };
+
   const statusColor = (s: Business["status"]) =>
     s === "active" ? "default" : s === "suspended" ? "secondary" : "destructive";
 
