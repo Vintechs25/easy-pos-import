@@ -1,0 +1,1 @@
+ALTER TABLE public.mpesa_transactions ADD COLUMN raw_callback jsonb;

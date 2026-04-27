@@ -92,6 +92,13 @@ export type Database = {
             referencedRelation: "branches"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "business_users_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       businesses: {
@@ -104,7 +111,7 @@ export type Database = {
           name: string
           owner_user_id: string | null
           slug: string
-          status: Database["public"]["Enums"]["business_status"]
+          status: string
           updated_at: string
         }
         Insert: {
@@ -116,7 +123,7 @@ export type Database = {
           name: string
           owner_user_id?: string | null
           slug: string
-          status?: Database["public"]["Enums"]["business_status"]
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -128,7 +135,7 @@ export type Database = {
           name?: string
           owner_user_id?: string | null
           slug?: string
-          status?: Database["public"]["Enums"]["business_status"]
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -296,7 +303,15 @@ export type Database = {
           shortcode?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mpesa_config_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mpesa_transactions: {
         Row: {
@@ -321,7 +336,7 @@ export type Database = {
         }
         Insert: {
           account_reference?: string | null
-          amount: number
+          amount?: number
           branch_id?: string | null
           business_id: string
           checkout_request_id?: string | null
@@ -359,25 +374,44 @@ export type Database = {
           transaction_desc?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mpesa_transactions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mpesa_transactions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mpesa_transactions_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
-          avatar_url: string | null
           created_at: string
           full_name: string | null
           id: string
           updated_at: string
         }
         Insert: {
-          avatar_url?: string | null
           created_at?: string
           full_name?: string | null
           id: string
           updated_at?: string
         }
         Update: {
-          avatar_url?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
@@ -466,7 +500,7 @@ export type Database = {
           discount?: number
           id?: string
           mpesa_transaction_id?: string | null
-          payment_method?: string
+          payment_method: string
           payment_ref?: string | null
           receipt_no?: string | null
           status?: string
@@ -558,7 +592,15 @@ export type Database = {
           phone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       timber_products: {
         Row: {
@@ -660,7 +702,29 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -682,7 +746,6 @@ export type Database = {
         Args: { _business_id: string; _user_id: string }
         Returns: boolean
       }
-      is_system_owner: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -691,7 +754,6 @@ export type Database = {
         | "supervisor"
         | "cashier"
         | "staff"
-      business_status: "active" | "suspended" | "revoked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -826,7 +888,6 @@ export const Constants = {
         "cashier",
         "staff",
       ],
-      business_status: ["active", "suspended", "revoked"],
     },
   },
 } as const
