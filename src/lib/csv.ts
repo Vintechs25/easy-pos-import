@@ -1,6 +1,6 @@
 // Minimal CSV utilities (no external dep)
 
-export function toCsv<T extends Record<string, unknown>>(
+export function toCsv<T extends object>(
   rows: T[],
   columns: { key: keyof T; header: string }[],
 ): string {
