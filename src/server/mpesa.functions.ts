@@ -79,6 +79,10 @@ async function resolveCreds(
   const env = (cfg?.environment as "sandbox" | "production") ?? "sandbox";
   const base = env === "production" ? PRODUCTION_BASE : SANDBOX_BASE;
 
+  if (cfg?.enabled === false) {
+    throw new Error("M-Pesa checkout is disabled for this business.");
+  }
+
   if (env === "production") {
     if (!cfg?.shortcode || !cfg?.passkey || !cfg?.consumer_key || !cfg?.consumer_secret) {
       throw new Error(
@@ -94,10 +98,6 @@ async function resolveCreds(
       callback_url: cfg.callback_url ?? null,
       base_url: base,
     };
-  }
-
-  if (cfg?.enabled === false) {
-    throw new Error("M-Pesa checkout is disabled for this business.");
   }
 
   return {
@@ -184,7 +184,7 @@ export const initiateMpesaStk = createServerFn({ method: "POST" })
     const callbackBase =
       process.env.MPESA_CALLBACK_BASE_URL ?? process.env.PUBLIC_SITE_URL ?? process.env.VITE_PUBLIC_SITE_URL ?? "";
     let callbackUrl = creds.callback_url || `${callbackBase.replace(/\/$/, "")}/api/public/mpesa-callback`;
-    if (!callbackBase) {
+    if (!creds.callback_url && !callbackBase) {
       throw new Error("M-Pesa callback URL is missing. Set it in Admin → Daraja Checkout.");
     }
     if (!/^https:\/\//i.test(callbackUrl)) throw new Error("M-Pesa callback URL must be a public HTTPS URL.");
