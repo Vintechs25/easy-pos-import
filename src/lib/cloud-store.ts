@@ -849,19 +849,33 @@ export async function adjustStock(args: {
   reason: string;
   user_id: string | null;
 }) {
-  const table = args.product_kind === "hardware" ? "hardware_products" : "timber_products";
-  const col = args.product_kind === "hardware" ? "stock" : "pieces";
-  const { data: prod, error: rdErr } = await supabase
-    .from(table)
-    .select(col)
-    .eq("id", args.product_id)
-    .maybeSingle();
-  if (rdErr) throw rdErr;
-  if (!prod) throw new Error("Product not found");
-  const old = Number((prod as Record<string, number>)[col]);
+  let old = 0;
+  if (args.product_kind === "hardware") {
+    const { data, error } = await supabase
+      .from("hardware_products")
+      .select("stock")
+      .eq("id", args.product_id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Product not found");
+    old = Number(data.stock);
+  } else {
+    const { data, error } = await supabase
+      .from("timber_products")
+      .select("pieces")
+      .eq("id", args.product_id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Product not found");
+    old = Number(data.pieces);
+  }
   const next = Math.max(0, Number(args.new_value));
   const delta = next - old;
-  await supabase.from(table).update({ [col]: next }).eq("id", args.product_id);
+  if (args.product_kind === "hardware") {
+    await supabase.from("hardware_products").update({ stock: next }).eq("id", args.product_id);
+  } else {
+    await supabase.from("timber_products").update({ pieces: next }).eq("id", args.product_id);
+  }
   await supabase.from("stock_adjustments").insert({
     business_id: args.business_id,
     branch_id: args.branch_id,
