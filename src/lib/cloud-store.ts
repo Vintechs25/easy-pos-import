@@ -106,6 +106,11 @@ export interface CloudSale {
   status: string;
   created_at: string;
   sale_items?: CloudSaleItem[];
+  refunded_at?: string | null;
+  refund_amount?: number;
+  refund_reason?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
 }
 
 export interface CloudSaleItem {
