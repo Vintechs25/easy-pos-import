@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   MapPin,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -51,6 +52,7 @@ const allNav: NavItem[] = [
   { to: "/pos", label: "Point of Sale", icon: ShoppingCart, highlight: true },
   { to: "/timber", label: "Timber Yard", icon: TreePine },
   { to: "/inventory", label: "Hardware", icon: Package },
+  { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["system_owner", "business_admin", "supervisor"] },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["system_owner", "business_admin", "supervisor"] },
   { to: "/business", label: "Business", icon: Building2, roles: ["system_owner", "business_admin"] },

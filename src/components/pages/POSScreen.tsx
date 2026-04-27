@@ -16,6 +16,8 @@ import {
   CreditCard,
   HardHat,
   Loader2,
+  Clock,
+  Printer,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth-context";
@@ -42,12 +44,17 @@ import {
   recordSale,
   formatKsh,
   pollMpesaStatus,
+  useSales,
+  getSaleWithItems,
   type CloudHardware,
   type CloudTimber,
   type CloudSaleItem,
+  type CloudSale,
 } from "@/lib/cloud-store";
 import { callWithAuth } from "@/lib/server-fn-auth";
 import { initiateMpesaStk, linkMpesaToSale } from "@/server/mpesa.functions";
+import { printReceipt } from "@/lib/receipt";
+import type { SaleRecord } from "@/lib/types";
 import { toast } from "sonner";
 
 interface CartLine extends CloudSaleItem {
@@ -60,6 +67,7 @@ export function POSScreen() {
   const { items: hardware, reload: reloadHw } = useHardware(activeBranchId);
   const { items: timber, reload: reloadTm } = useTimber(activeBranchId);
   const { items: customers } = useCustomers();
+  const { items: recentSales, reload: reloadSales } = useSales(activeBranchId);
   const activeBiz = businesses.find((b) => b.id === activeBusinessId);
 
   const [search, setSearch] = useState("");
@@ -71,6 +79,9 @@ export function POSScreen() {
   const [payOpen, setPayOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<string>("");
+  const [lastSale, setLastSale] = useState<SaleRecord | null>(null);
+  const [salesOpen, setSalesOpen] = useState(false);
+  const [reprintBusyId, setReprintBusyId] = useState<string | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [mpesaOpen, setMpesaOpen] = useState(false);
@@ -106,6 +117,49 @@ export function POSScreen() {
   const totalDiscPct = discountPct + (customer ? Number(customer.loyalty_discount_pct) : 0);
   const discount = (subtotal * totalDiscPct) / 100;
   const total = subtotal - discount;
+
+  function toReceiptSale(sale: CloudSale, items: CloudSaleItem[] = []): SaleRecord {
+    const receiptItems = items.map((i) => ({
+      lineId: i.id ?? `${sale.id}-${i.product_id ?? i.name}`,
+      kind: i.kind,
+      productId: i.product_id ?? "",
+      name: i.name,
+      description: i.description ?? "",
+      quantity: Number(i.quantity),
+      unitPrice: Number(i.unit_price),
+      unitLabel: i.unit_label ?? "",
+      total: Number(i.total),
+      meta: i.meta as SaleRecord["items"][number]["meta"],
+    }));
+    return {
+      id: sale.id,
+      receiptNo: sale.receipt_no,
+      date: sale.created_at,
+      customerId: sale.customer_id,
+      customerName: sale.customer_name ?? "Walk-in",
+      items: receiptItems,
+      subtotal: Number(sale.subtotal),
+      discount: Number(sale.discount),
+      total: Number(sale.total),
+      payment: sale.payment_method as SaleRecord["payment"],
+      paymentRef: sale.payment_ref,
+      status: sale.status === "credit" ? "credit" : "paid",
+    };
+  }
+
+  async function reprintSale(saleId: string) {
+    setReprintBusyId(saleId);
+    try {
+      const sale = await getSaleWithItems(saleId);
+      printReceipt(toReceiptSale(sale, sale.sale_items ?? []), {
+        businessName: activeBiz?.name ?? "TimberYard POS",
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setReprintBusyId(null);
+    }
+  }
 
   function addHardwareItem(h: CloudHardware) {
     setCart((prev) => {
@@ -194,6 +248,7 @@ export function POSScreen() {
     }
 
     try {
+      const receiptItems = cart.map(({ lineId: _l, ...rest }) => rest);
       const sale = await recordSale({
         business_id: activeBusinessId,
         branch_id: activeBranchId,
@@ -206,15 +261,17 @@ export function POSScreen() {
         total,
         payment_ref: paymentRef ?? null,
         mpesa_transaction_id: mpesaTxId ?? null,
-        items: cart.map(({ lineId: _l, ...rest }) => rest),
+        items: receiptItems,
         created_by: user?.id ?? null,
       });
       setLastReceipt(sale.receipt_no ?? sale.id);
+      setLastSale(toReceiptSale(sale, receiptItems));
       setConfirmOpen(true);
       setPayOpen(false);
       clearCart();
       reloadHw();
       reloadTm();
+      reloadSales();
       return sale;
     } catch (e) {
       toast.error((e as Error).message);
@@ -398,6 +455,15 @@ export function POSScreen() {
       {/* Catalog */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="border-b border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">Checkout</h1>
+              <p className="text-xs text-muted-foreground">Scan, sell, print receipts.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setSalesOpen(true)}>
+              <Clock className="h-4 w-4 mr-1" /> Sales history
+            </Button>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -567,8 +633,50 @@ export function POSScreen() {
             <div className="text-xl font-bold tracking-wider">{lastReceipt}</div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setConfirmOpen(false)} className="w-full">Done</Button>
+            <Button variant="outline" onClick={() => lastSale && printReceipt(lastSale, { businessName: activeBiz?.name ?? "TimberYard POS" })} disabled={!lastSale}>
+              <Printer className="h-4 w-4 mr-1" /> Print receipt
+            </Button>
+            <Button onClick={() => setConfirmOpen(false)}>Done</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sales history / reprint */}
+      <Dialog open={salesOpen} onOpenChange={setSalesOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" /> Sales history
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {recentSales.length === 0 && (
+              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No sales yet for this branch.
+              </div>
+            )}
+            {recentSales.map((sale) => (
+              <div key={sale.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{sale.receipt_no ?? sale.id.slice(0, 8)}</span>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-secondary-foreground">
+                      {sale.payment_method}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {new Date(sale.created_at).toLocaleString()} · {sale.customer_name ?? "Walk-in"}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-right font-bold">{formatKsh(Number(sale.total))}</div>
+                  <Button variant="outline" size="sm" onClick={() => reprintSale(sale.id)} disabled={reprintBusyId === sale.id}>
+                    {reprintBusyId === sale.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -105,6 +105,7 @@ export interface CloudSale {
   mpesa_transaction_id: string | null;
   status: string;
   created_at: string;
+  sale_items?: CloudSaleItem[];
 }
 
 export interface CloudSaleItem {
@@ -399,6 +400,16 @@ export function useSales(branchId: string | null, allBranches = false) {
   }, [load]);
 
   return { items, loading, reload: load };
+}
+
+export async function getSaleWithItems(saleId: string) {
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .select("*, sale_items(*)")
+    .eq("id", saleId)
+    .single();
+  if (error || !sale) throw error ?? new Error("Sale not found");
+  return sale as CloudSale;
 }
 
 /**

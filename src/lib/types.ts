@@ -65,6 +65,7 @@ export interface Customer {
 
 export interface SaleRecord {
   id: string;
+  receiptNo?: string | null;
   date: string;
   customerId: string | null;
   customerName: string;
@@ -73,5 +74,6 @@ export interface SaleRecord {
   discount: number;
   total: number;
   payment: "cash" | "card" | "mpesa" | "credit";
+  paymentRef?: string | null;
   status: "paid" | "credit";
 }

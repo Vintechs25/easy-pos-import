@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
@@ -69,6 +70,17 @@ export function SystemOwnerPanel() {
   const [branchName, setBranchName] = useState("Main Branch");
   const [branchCode, setBranchCode] = useState("HQ");
   const [expiresDays, setExpiresDays] = useState("365");
+  const [mpesaBusinessId, setMpesaBusinessId] = useState("");
+  const [mpesaBusy, setMpesaBusy] = useState(false);
+  const [mpesaForm, setMpesaForm] = useState({
+    environment: "sandbox" as "sandbox" | "production",
+    shortcode: "",
+    passkey: "",
+    consumer_key: "",
+    consumer_secret: "",
+    callback_url: "",
+    enabled: false,
+  });
 
   // Result state (credentials shown after creation)
   const [result, setResult] = useState<{
@@ -176,6 +188,49 @@ export function SystemOwnerPanel() {
       toast.success(`Extended by ${days} days`);
       await load();
     }
+  };
+
+  const loadMpesaConfig = async (businessId: string) => {
+    setMpesaBusinessId(businessId);
+    const { data, error } = await supabase
+      .from("mpesa_config")
+      .select("*")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setMpesaForm({
+      environment: (data?.environment as "sandbox" | "production") ?? "sandbox",
+      shortcode: data?.shortcode ?? "",
+      passkey: data?.passkey ?? "",
+      consumer_key: data?.consumer_key ?? "",
+      consumer_secret: data?.consumer_secret ?? "",
+      callback_url: data?.callback_url ?? "",
+      enabled: Boolean(data?.enabled),
+    });
+  };
+
+  const saveMpesaConfig = async () => {
+    if (!mpesaBusinessId) {
+      toast.error("Select a business first");
+      return;
+    }
+    setMpesaBusy(true);
+    const { error } = await supabase.from("mpesa_config").upsert({
+      business_id: mpesaBusinessId,
+      environment: mpesaForm.environment,
+      shortcode: mpesaForm.shortcode.trim() || null,
+      passkey: mpesaForm.passkey.trim() || null,
+      consumer_key: mpesaForm.consumer_key.trim() || null,
+      consumer_secret: mpesaForm.consumer_secret.trim() || null,
+      callback_url: mpesaForm.callback_url.trim() || null,
+      enabled: mpesaForm.enabled,
+    }, { onConflict: "business_id" });
+    setMpesaBusy(false);
+    if (error) toast.error(error.message);
+    else toast.success("Daraja settings saved");
   };
 
   const statusColor = (s: Business["status"]) =>
@@ -375,6 +430,73 @@ export function SystemOwnerPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="h-5 w-5" /> Daraja Checkout
+          </CardTitle>
+          <CardDescription>
+            System-owner-only M-Pesa STK Push credentials for each business.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <Select value={mpesaBusinessId || "none"} onValueChange={(v) => v !== "none" && loadMpesaConfig(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose business" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Choose business</SelectItem>
+                {businesses.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={mpesaForm.environment} onValueChange={(v) => setMpesaForm({ ...mpesaForm, environment: v as "sandbox" | "production" })}>
+              <SelectTrigger className="md:w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sandbox">Sandbox</SelectItem>
+                <SelectItem value="production">Production</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Shortcode</Label>
+              <Input value={mpesaForm.shortcode} onChange={(e) => setMpesaForm({ ...mpesaForm, shortcode: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Passkey</Label>
+              <Input value={mpesaForm.passkey} onChange={(e) => setMpesaForm({ ...mpesaForm, passkey: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consumer key</Label>
+              <Input value={mpesaForm.consumer_key} onChange={(e) => setMpesaForm({ ...mpesaForm, consumer_key: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consumer secret</Label>
+              <Input type="password" value={mpesaForm.consumer_secret} onChange={(e) => setMpesaForm({ ...mpesaForm, consumer_secret: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Callback URL override</Label>
+            <Input placeholder="Optional" value={mpesaForm.callback_url} onChange={(e) => setMpesaForm({ ...mpesaForm, callback_url: e.target.value })} />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={mpesaForm.enabled} onChange={(e) => setMpesaForm({ ...mpesaForm, enabled: e.target.checked })} />
+              Enable M-Pesa checkout
+            </label>
+            <Button onClick={saveMpesaConfig} disabled={mpesaBusy || !mpesaBusinessId}>
+              {mpesaBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Daraja settings
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
