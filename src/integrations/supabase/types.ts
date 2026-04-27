@@ -326,6 +326,7 @@ export type Database = {
           merchant_request_id: string | null
           mpesa_receipt_number: string | null
           phone: string
+          raw_callback: Json | null
           result_code: number | null
           result_desc: string | null
           sale_id: string | null
@@ -345,6 +346,7 @@ export type Database = {
           merchant_request_id?: string | null
           mpesa_receipt_number?: string | null
           phone: string
+          raw_callback?: Json | null
           result_code?: number | null
           result_desc?: string | null
           sale_id?: string | null
@@ -364,6 +366,7 @@ export type Database = {
           merchant_request_id?: string | null
           mpesa_receipt_number?: string | null
           phone?: string
+          raw_callback?: Json | null
           result_code?: number | null
           result_desc?: string | null
           sale_id?: string | null
