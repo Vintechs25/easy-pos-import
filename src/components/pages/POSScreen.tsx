@@ -16,6 +16,8 @@ import {
   CreditCard,
   HardHat,
   Loader2,
+  Clock,
+  Printer,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth-context";
@@ -42,12 +44,17 @@ import {
   recordSale,
   formatKsh,
   pollMpesaStatus,
+  useSales,
+  getSaleWithItems,
   type CloudHardware,
   type CloudTimber,
   type CloudSaleItem,
+  type CloudSale,
 } from "@/lib/cloud-store";
 import { callWithAuth } from "@/lib/server-fn-auth";
 import { initiateMpesaStk, linkMpesaToSale } from "@/server/mpesa.functions";
+import { printReceipt } from "@/lib/receipt";
+import type { SaleRecord } from "@/lib/types";
 import { toast } from "sonner";
 
 interface CartLine extends CloudSaleItem {
@@ -60,6 +67,7 @@ export function POSScreen() {
   const { items: hardware, reload: reloadHw } = useHardware(activeBranchId);
   const { items: timber, reload: reloadTm } = useTimber(activeBranchId);
   const { items: customers } = useCustomers();
+  const { items: recentSales, reload: reloadSales } = useSales(activeBranchId);
   const activeBiz = businesses.find((b) => b.id === activeBusinessId);
 
   const [search, setSearch] = useState("");
@@ -71,6 +79,9 @@ export function POSScreen() {
   const [payOpen, setPayOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<string>("");
+  const [lastSale, setLastSale] = useState<SaleRecord | null>(null);
+  const [salesOpen, setSalesOpen] = useState(false);
+  const [reprintBusyId, setReprintBusyId] = useState<string | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [mpesaOpen, setMpesaOpen] = useState(false);
@@ -106,6 +117,49 @@ export function POSScreen() {
   const totalDiscPct = discountPct + (customer ? Number(customer.loyalty_discount_pct) : 0);
   const discount = (subtotal * totalDiscPct) / 100;
   const total = subtotal - discount;
+
+  function toReceiptSale(sale: CloudSale, items: CloudSaleItem[] = []): SaleRecord {
+    const receiptItems = items.map((i) => ({
+      lineId: i.id ?? `${sale.id}-${i.product_id ?? i.name}`,
+      kind: i.kind,
+      productId: i.product_id ?? "",
+      name: i.name,
+      description: i.description ?? "",
+      quantity: Number(i.quantity),
+      unitPrice: Number(i.unit_price),
+      unitLabel: i.unit_label ?? "",
+      total: Number(i.total),
+      meta: i.meta as SaleRecord["items"][number]["meta"],
+    }));
+    return {
+      id: sale.id,
+      receiptNo: sale.receipt_no,
+      date: sale.created_at,
+      customerId: sale.customer_id,
+      customerName: sale.customer_name ?? "Walk-in",
+      items: receiptItems,
+      subtotal: Number(sale.subtotal),
+      discount: Number(sale.discount),
+      total: Number(sale.total),
+      payment: sale.payment_method as SaleRecord["payment"],
+      paymentRef: sale.payment_ref,
+      status: sale.status === "credit" ? "credit" : "paid",
+    };
+  }
+
+  async function reprintSale(saleId: string) {
+    setReprintBusyId(saleId);
+    try {
+      const sale = await getSaleWithItems(saleId);
+      printReceipt(toReceiptSale(sale, sale.sale_items ?? []), {
+        businessName: activeBiz?.name ?? "TimberYard POS",
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setReprintBusyId(null);
+    }
+  }
 
   function addHardwareItem(h: CloudHardware) {
     setCart((prev) => {
