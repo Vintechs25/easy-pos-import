@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
@@ -69,6 +70,17 @@ export function SystemOwnerPanel() {
   const [branchName, setBranchName] = useState("Main Branch");
   const [branchCode, setBranchCode] = useState("HQ");
   const [expiresDays, setExpiresDays] = useState("365");
+  const [mpesaBusinessId, setMpesaBusinessId] = useState("");
+  const [mpesaBusy, setMpesaBusy] = useState(false);
+  const [mpesaForm, setMpesaForm] = useState({
+    environment: "sandbox" as "sandbox" | "production",
+    shortcode: "",
+    passkey: "",
+    consumer_key: "",
+    consumer_secret: "",
+    callback_url: "",
+    enabled: false,
+  });
 
   // Result state (credentials shown after creation)
   const [result, setResult] = useState<{
