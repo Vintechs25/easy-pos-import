@@ -1,8 +1,10 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/lib/auth-context";
 
 import appCss from "../styles.css?url";
+
+type AuthProviderComponent = ({ children }: { children: ReactNode }) => JSX.Element;
 
 function NotFoundComponent() {
   return (
@@ -52,7 +54,7 @@ export const Route = createRootRoute({
   notFoundComponent: NotFoundComponent,
 });
 
-function RootShell({ children }: { children: React.ReactNode }) {
+function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -67,6 +69,18 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const [AuthProvider, setAuthProvider] = useState<AuthProviderComponent | null>(null);
+
+  useEffect(() => {
+    void import("@/lib/auth-context").then((module) => {
+      setAuthProvider(() => module.AuthProvider);
+    });
+  }, []);
+
+  if (!AuthProvider) {
+    return <Toaster />;
+  }
+
   return (
     <AuthProvider>
       <Outlet />
