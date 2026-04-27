@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TimberRouteImport } from './routes/timber'
 import { Route as SuppliersRouteImport } from './routes/suppliers'
+import { Route as SalesRouteImport } from './routes/sales'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as InventoryRouteImport } from './routes/inventory'
@@ -29,6 +30,11 @@ const TimberRoute = TimberRouteImport.update({
 const SuppliersRoute = SuppliersRouteImport.update({
   id: '/suppliers',
   path: '/suppliers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesRoute = SalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/pos': typeof PosRoute
   '/reports': typeof ReportsRoute
+  '/sales': typeof SalesRoute
   '/suppliers': typeof SuppliersRoute
   '/timber': typeof TimberRoute
   '/api/public/mpesa-callback': typeof ApiPublicMpesaCallbackRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/pos': typeof PosRoute
   '/reports': typeof ReportsRoute
+  '/sales': typeof SalesRoute
   '/suppliers': typeof SuppliersRoute
   '/timber': typeof TimberRoute
   '/api/public/mpesa-callback': typeof ApiPublicMpesaCallbackRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/pos': typeof PosRoute
   '/reports': typeof ReportsRoute
+  '/sales': typeof SalesRoute
   '/suppliers': typeof SuppliersRoute
   '/timber': typeof TimberRoute
   '/api/public/mpesa-callback': typeof ApiPublicMpesaCallbackRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/pos'
     | '/reports'
+    | '/sales'
     | '/suppliers'
     | '/timber'
     | '/api/public/mpesa-callback'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/pos'
     | '/reports'
+    | '/sales'
     | '/suppliers'
     | '/timber'
     | '/api/public/mpesa-callback'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/pos'
     | '/reports'
+    | '/sales'
     | '/suppliers'
     | '/timber'
     | '/api/public/mpesa-callback'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   PosRoute: typeof PosRoute
   ReportsRoute: typeof ReportsRoute
+  SalesRoute: typeof SalesRoute
   SuppliersRoute: typeof SuppliersRoute
   TimberRoute: typeof TimberRoute
   ApiPublicMpesaCallbackRoute: typeof ApiPublicMpesaCallbackRoute
@@ -187,6 +200,13 @@ declare module '@tanstack/react-router' {
       path: '/suppliers'
       fullPath: '/suppliers'
       preLoaderRoute: typeof SuppliersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales': {
+      id: '/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof SalesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   PosRoute: PosRoute,
   ReportsRoute: ReportsRoute,
+  SalesRoute: SalesRoute,
   SuppliersRoute: SuppliersRoute,
   TimberRoute: TimberRoute,
   ApiPublicMpesaCallbackRoute: ApiPublicMpesaCallbackRoute,
