@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 import { create } from "zustand";
 
+const cloudDb = supabase as ReturnType<typeof supabase.schema>;
+
 // Active branch selection (per user, per device)
 const ACTIVE_BRANCH_KEY = "ty_active_branch";
 
@@ -635,7 +637,7 @@ export async function refundSale(args: {
 }) {
   const amount = args.lines.reduce((s, l) => s + Number(l.total), 0);
   if (amount <= 0) throw new Error("Nothing to refund");
-  const { error: refErr } = await supabase.from("sale_refunds").insert({
+  const { error: refErr } = await cloudDb.from("sale_refunds").insert({
     sale_id: args.sale.id,
     business_id: args.sale.business_id,
     branch_id: args.sale.branch_id,
@@ -676,7 +678,7 @@ export async function refundSale(args: {
             .from("hardware_products")
             .update({ stock: newStock })
             .eq("id", line.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: args.sale.business_id,
             branch_id: args.sale.branch_id,
             product_id: line.product_id,
@@ -703,7 +705,7 @@ export async function refundSale(args: {
             .from("timber_products")
             .update({ pieces: newPieces })
             .eq("id", line.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: args.sale.business_id,
             branch_id: args.sale.branch_id,
             product_id: line.product_id,
