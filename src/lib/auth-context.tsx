@@ -39,17 +39,51 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const ACTIVE_BIZ_KEY = "ty_active_business";
 
+function getErrorMessage(error: unknown, fallback = "Something went wrong while checking your access.") {
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return fallback;
+}
+
+function isRetryableBackendError(error: unknown) {
+  const message = getErrorMessage(error, "");
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status ?? 0)
+      : 0;
+
+  return (
+    code === "PGRST002" ||
+    status === 503 ||
+    message.includes("schema cache") ||
+    message.includes("Could not query the database")
+  );
+}
+
 async function retryCloudQuery<T>(queryFactory: () => PromiseLike<{ data: T | null; error: unknown }>) {
   let lastResult: { data: T | null; error: unknown } = { data: null, error: null };
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const retryDelays = [350, 900, 1800, 3000];
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
     lastResult = await queryFactory();
     if (!lastResult.error) return lastResult;
-    const message = lastResult.error instanceof Error ? lastResult.error.message : String(lastResult.error ?? "");
-    if (message.includes("schema cache") || message.includes("PGRST002")) {
+
+    if (attempt === retryDelays.length || !isRetryableBackendError(lastResult.error)) {
       break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+
+    await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
   }
+
   return lastResult;
 }
 
@@ -77,19 +111,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       retryCloudQuery(() => supabase.from("user_roles").select("role,business_id,branch_id").eq("user_id", uid)),
       retryCloudQuery(() => supabase.from("businesses").select("id,name,slug,status").order("name")),
     ]);
-    if (rolesError || bizError) {
-      const message = [rolesError, bizError]
-        .filter(Boolean)
-        .map((error) => (error instanceof Error ? error.message : String(error)))
-        .join(" · ");
-      setAuthError(message || "We couldn't load your access rights right now.");
+    if (rolesError) {
+      const message = isRetryableBackendError(rolesError)
+        ? "Your account is signed in, but the backend is still finishing the access check. Please retry in a moment."
+        : getErrorMessage(rolesError, "We couldn't load your access rights right now.");
+      setAuthError(message);
       setRoles([]);
+      setBusinesses((bizData as BusinessSummary[]) ?? []);
+      return;
+    }
+
+    setRoles((rolesData as UserRole[]) ?? []);
+
+    if (bizError) {
       setBusinesses([]);
       setActiveBusinessIdState(null);
       return;
     }
 
-    setRoles((rolesData as UserRole[]) ?? []);
     setBusinesses((bizData as BusinessSummary[]) ?? []);
 
     const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_BIZ_KEY) : null;
@@ -136,7 +175,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applySession(newSession);
     });
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: s }, error }) => {
+      if (
+        error &&
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: unknown }).code === "refresh_token_not_found"
+      ) {
+        await supabase.auth.signOut({ scope: "local" });
+        bootstrappedRef.current = true;
+        applySession(null);
+        return;
+      }
+
       bootstrappedRef.current = true;
       applySession(s);
     });
