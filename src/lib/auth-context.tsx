@@ -108,13 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserData = async (uid: string) => {
     setAuthError(null);
     const [{ data: rolesData, error: rolesError }, { data: bizData, error: bizError }] = await Promise.all([
-      retryCloudQuery(() =>
-        supabase
-          .from("user_roles")
-          .select("role,business_id,branch_id")
-          .eq("user_id", uid)
-          .order("created_at", { ascending: true }),
-      ),
+      retryCloudQuery(() => supabase.rpc("get_my_roles")),
       retryCloudQuery(() => supabase.from("businesses").select("id,name,slug,status").order("name")),
     ]);
     if (rolesError) {
