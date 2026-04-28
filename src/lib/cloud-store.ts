@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 import { create } from "zustand";
 
+const cloudDb = supabase as unknown as ReturnType<typeof supabase.schema>;
+
 // Active branch selection (per user, per device)
 const ACTIVE_BRANCH_KEY = "ty_active_branch";
 
@@ -635,7 +637,7 @@ export async function refundSale(args: {
 }) {
   const amount = args.lines.reduce((s, l) => s + Number(l.total), 0);
   if (amount <= 0) throw new Error("Nothing to refund");
-  const { error: refErr } = await supabase.from("sale_refunds").insert({
+  const { error: refErr } = await cloudDb.from("sale_refunds").insert({
     sale_id: args.sale.id,
     business_id: args.sale.business_id,
     branch_id: args.sale.branch_id,
@@ -657,7 +659,7 @@ export async function refundSale(args: {
       refunded_by: args.user_id,
       refund_reason: args.reason || null,
       status: fullyRefunded ? "refunded" : args.sale.status,
-    })
+    } as never)
     .eq("id", args.sale.id);
   if (upErr) throw upErr;
 
@@ -676,7 +678,7 @@ export async function refundSale(args: {
             .from("hardware_products")
             .update({ stock: newStock })
             .eq("id", line.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: args.sale.business_id,
             branch_id: args.sale.branch_id,
             product_id: line.product_id,
@@ -703,7 +705,7 @@ export async function refundSale(args: {
             .from("timber_products")
             .update({ pieces: newPieces })
             .eq("id", line.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: args.sale.business_id,
             branch_id: args.sale.branch_id,
             product_id: line.product_id,
@@ -767,7 +769,7 @@ export async function voidSale(args: {
             .from("hardware_products")
             .update({ stock: newStock })
             .eq("id", item.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: sale.business_id,
             branch_id: sale.branch_id,
             product_id: item.product_id,
@@ -795,7 +797,7 @@ export async function voidSale(args: {
             .from("timber_products")
             .update({ pieces: newPieces })
             .eq("id", item.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: sale.business_id,
             branch_id: sale.branch_id,
             product_id: item.product_id,
@@ -834,7 +836,7 @@ export async function voidSale(args: {
       voided_at: new Date().toISOString(),
       voided_by: args.user_id,
       void_reason: args.reason || null,
-    })
+    } as never)
     .eq("id", sale.id);
   if (upErr) throw upErr;
 }
@@ -876,7 +878,7 @@ export async function adjustStock(args: {
   } else {
     await supabase.from("timber_products").update({ pieces: next }).eq("id", args.product_id);
   }
-  await supabase.from("stock_adjustments").insert({
+  await cloudDb.from("stock_adjustments").insert({
     business_id: args.business_id,
     branch_id: args.branch_id,
     product_id: args.product_id,
@@ -937,13 +939,13 @@ export function useStockAdjustments(branchId: string | null) {
       return;
     }
     setLoading(true);
-    const { data } = await supabase
+    const { data } = await cloudDb
       .from("stock_adjustments")
       .select("*")
       .eq("branch_id", branchId)
       .order("created_at", { ascending: false })
       .limit(200);
-    setItems((data as StockAdjustment[]) ?? []);
+    setItems((data as unknown as StockAdjustment[]) ?? []);
     setLoading(false);
   }, [branchId]);
   useEffect(() => {
