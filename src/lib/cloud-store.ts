@@ -659,7 +659,7 @@ export async function refundSale(args: {
       refunded_by: args.user_id,
       refund_reason: args.reason || null,
       status: fullyRefunded ? "refunded" : args.sale.status,
-    })
+    } as never)
     .eq("id", args.sale.id);
   if (upErr) throw upErr;
 
@@ -836,7 +836,7 @@ export async function voidSale(args: {
       voided_at: new Date().toISOString(),
       voided_by: args.user_id,
       void_reason: args.reason || null,
-    })
+    } as never)
     .eq("id", sale.id);
   if (upErr) throw upErr;
 }
@@ -939,13 +939,13 @@ export function useStockAdjustments(branchId: string | null) {
       return;
     }
     setLoading(true);
-    const { data } = await supabase
+    const { data } = await cloudDb
       .from("stock_adjustments")
       .select("*")
       .eq("branch_id", branchId)
       .order("created_at", { ascending: false })
       .limit(200);
-    setItems((data as StockAdjustment[]) ?? []);
+    setItems((data as unknown as StockAdjustment[]) ?? []);
     setLoading(false);
   }, [branchId]);
   useEffect(() => {
