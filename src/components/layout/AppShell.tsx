@@ -189,11 +189,14 @@ function BranchSwitcher() {
 }
 
 function UserMenu() {
-  const { user, signOut, isSystemOwner, isBusinessAdmin, isSupervisor, isCashier } = useAuth();
+  const { user, signOut, roles, loading, isSystemOwner, isBusinessAdmin, isSupervisor, isCashier } = useAuth();
   const navigate = useNavigate();
   if (!user) return null;
   const initial = (user.email ?? "?")[0]?.toUpperCase();
-  const roleLabel = isSystemOwner
+  const hasRoles = roles.length > 0;
+  const roleLabel = loading && !hasRoles
+    ? "Checking role…"
+    : isSystemOwner
     ? "System Owner"
     : isBusinessAdmin
       ? "Business Owner"

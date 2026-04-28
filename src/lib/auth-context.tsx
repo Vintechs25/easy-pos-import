@@ -108,7 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserData = async (uid: string) => {
     setAuthError(null);
     const [{ data: rolesData, error: rolesError }, { data: bizData, error: bizError }] = await Promise.all([
-      retryCloudQuery(() => supabase.from("user_roles").select("role,business_id,branch_id").eq("user_id", uid)),
+      retryCloudQuery(() =>
+        supabase
+          .from("user_roles")
+          .select("role,business_id,branch_id")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: true }),
+      ),
       retryCloudQuery(() => supabase.from("businesses").select("id,name,slug,status").order("name")),
     ]);
     if (rolesError) {
@@ -121,7 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setRoles((rolesData as UserRole[]) ?? []);
+    const loadedRoles = ((rolesData as UserRole[]) ?? []).sort((a, b) =>
+      a.role === "system_owner" ? -1 : b.role === "system_owner" ? 1 : 0,
+    );
+    setRoles(loadedRoles);
 
     if (bizError) {
       setBusinesses([]);
