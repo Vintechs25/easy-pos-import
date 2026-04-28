@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 import { create } from "zustand";
 
-const cloudDb = supabase as ReturnType<typeof supabase.schema>;
+const cloudDb = supabase as unknown as ReturnType<typeof supabase.schema>;
 
 // Active branch selection (per user, per device)
 const ACTIVE_BRANCH_KEY = "ty_active_branch";
@@ -769,7 +769,7 @@ export async function voidSale(args: {
             .from("hardware_products")
             .update({ stock: newStock })
             .eq("id", item.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: sale.business_id,
             branch_id: sale.branch_id,
             product_id: item.product_id,
@@ -797,7 +797,7 @@ export async function voidSale(args: {
             .from("timber_products")
             .update({ pieces: newPieces })
             .eq("id", item.product_id);
-          await supabase.from("stock_adjustments").insert({
+          await cloudDb.from("stock_adjustments").insert({
             business_id: sale.business_id,
             branch_id: sale.branch_id,
             product_id: item.product_id,
@@ -878,7 +878,7 @@ export async function adjustStock(args: {
   } else {
     await supabase.from("timber_products").update({ pieces: next }).eq("id", args.product_id);
   }
-  await supabase.from("stock_adjustments").insert({
+  await cloudDb.from("stock_adjustments").insert({
     business_id: args.business_id,
     branch_id: args.branch_id,
     product_id: args.product_id,
